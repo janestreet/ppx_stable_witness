@@ -257,7 +257,7 @@ module Structure = struct
            Perhaps you can define an alias for the shadowed type, then use the alias in \
            this definition."
       in
-      [%str [%ocaml.error [%e estring ~loc message]]]
+      [%str [%%ocaml.error [%e estring ~loc message]]]
     | _ ->
       let rec_flag = really_recursive rec_flag tds in
       List.concat
