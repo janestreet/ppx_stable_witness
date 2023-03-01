@@ -45,7 +45,7 @@ module Value_binding = struct
   type t = value_binding
 
   let sexp_of_t _ = Sexp.Atom "_"
-  let compare = Comparable.lift Poly.compare ~f:strip_locs#value_binding
+  let compare a b = Comparable.lift Poly.compare ~f:strip_locs#value_binding a b
 
   include (val Comparator.make ~compare ~sexp_of_t)
 end
