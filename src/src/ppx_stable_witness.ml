@@ -109,7 +109,8 @@ module Structure = struct
        | Ptyp_arrow _ -> [ unsupported ~loc "arrow type" ]
        | Ptyp_tuple tuple -> List.concat_map tuple ~f:check_core_type
        | Ptyp_constr (id, params) ->
-         check_type_constructor ~loc id params :: List.concat_map params ~f:check_core_type
+         check_type_constructor ~loc id params
+         :: List.concat_map params ~f:check_core_type
        | Ptyp_object _ -> [ unsupported ~loc "object type" ]
        | Ptyp_class _ -> [ unsupported ~loc "class type" ]
        | Ptyp_alias (core_type, _) -> check_core_type core_type
