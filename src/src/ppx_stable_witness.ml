@@ -42,12 +42,7 @@ let stable_witness_type ~loc core_type =
 let stable_witness_variable var = "__'" ^ var ^ "_stable_witness"
 
 module Value_binding = struct
-  type t = value_binding
-
-  let sexp_of_t _ = Sexp.Atom "_"
   let compare a b = Comparable.lift Poly.compare ~f:strip_locs#value_binding a b
-
-  include (val Comparator.make ~compare ~sexp_of_t)
 end
 
 module Signature = struct
@@ -162,7 +157,7 @@ module Structure = struct
     in
     let checks =
       (* Don't bother generating obviously redundant checks. *)
-      Set.stable_dedup_list (module Value_binding) checks
+      List.stable_dedup ~compare:Value_binding.compare checks
     in
     match List.is_empty checks with
     | true -> []
