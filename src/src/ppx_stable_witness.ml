@@ -168,8 +168,7 @@ module Structure = struct
       let expr =
         eunit ~loc
         |> pexp_let ~loc Nonrecursive checks
-        |> eabstract ~loc [ punit ~loc ]
-        |> eabstract ~loc (param_patterns td)
+        |> eabstract ~loc (param_patterns td @ [ punit ~loc ])
       in
       [ value_binding ~loc ~pat ~expr ]
   ;;
