@@ -65,7 +65,8 @@ module type Stable_witness = sig
       :  ('a t -> 'a Stable_format.t t) (** witness for stable format *)
       -> ('a Stable_format.t -> 'a M.t) (** conversion from stable format *)
       -> ('a M.t -> 'a Stable_format.t) (** conversion to stable format *)
-      -> ('a t -> 'a M.t t)
+      -> 'a t
+      -> 'a M.t t
   end
 
   module type T2 = T2
@@ -76,18 +77,23 @@ module type Stable_witness = sig
       :  ('a1 t -> 'a2 t -> ('a1, 'a2) Stable_format.t t) (** witness for stable format *)
       -> (('a1, 'a2) Stable_format.t -> ('a1, 'a2) M.t) (** from stable format *)
       -> (('a1, 'a2) M.t -> ('a1, 'a2) Stable_format.t) (** to stable format *)
-      -> ('a1 t -> 'a2 t -> ('a1, 'a2) M.t t)
+      -> 'a1 t
+      -> 'a2 t
+      -> ('a1, 'a2) M.t t
   end
 
   module Of_serializable3 (Stable_format : T3) (M : T3) : sig
     (** This is the analogue of [of_serializable] for types with 3 type parameters. *)
     val of_serializable
       :  ('a1 t -> 'a2 t -> 'a3 t -> ('a1, 'a2, 'a3) Stable_format.t t)
-      (** witness for stable format *)
+         (** witness for stable format *)
       -> (('a1, 'a2, 'a3) Stable_format.t -> ('a1, 'a2, 'a3) M.t)
-      (** from stable format *)
+         (** from stable format *)
       -> (('a1, 'a2, 'a3) M.t -> ('a1, 'a2, 'a3) Stable_format.t) (** to stable format *)
-      -> ('a1 t -> 'a2 t -> 'a3 t -> ('a1, 'a2, 'a3) M.t t)
+      -> 'a1 t
+      -> 'a2 t
+      -> 'a3 t
+      -> ('a1, 'a2, 'a3) M.t t
   end
 
   (** This is an escape hatch.  Don't use it unless you have to.
