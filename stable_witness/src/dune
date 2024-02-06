@@ -1,3 +1,5 @@
-(library (name stable_witness)
- (public_name ppx_stable_witness.stable_witness) (libraries)
+(library
+ (name stable_witness)
+ (public_name ppx_stable_witness.stable_witness)
+ (libraries)
  (preprocess no_preprocessing))
