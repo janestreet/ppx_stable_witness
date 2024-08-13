@@ -127,7 +127,12 @@ module Structure = struct
     | Some _ -> [ unsupported ~loc:cd.pcd_loc "GADT" ]
     | None ->
       (match cd.pcd_args with
-       | Pcstr_tuple tuple -> List.concat_map ~f:check_core_type tuple
+       | Pcstr_tuple tuple ->
+         List.concat_map
+           ~f:(fun arg ->
+             let type_ = Ppxlib_jane.Shim.Pcstr_tuple_arg.to_core_type arg in
+             check_core_type type_)
+           tuple
        | Pcstr_record record -> List.concat_map ~f:check_label_declaration record)
   ;;
 
@@ -173,14 +178,27 @@ module Structure = struct
       [ value_binding ~loc ~pat ~expr ]
   ;;
 
+  let assert_witness_expr ~loc =
+    [%expr Ppx_stable_witness_runtime.Stable_witness.assert_stable]
+  ;;
+
   (* Create a stable witness for a type we trust to be stable. Evalutes to a variable
      reference so that it is safe inside [let rec]. *)
   let assert_witness_for core_type =
     let loc = ghost core_type.ptyp_loc in
-    pexp_constraint
-      ~loc
-      [%expr Ppx_stable_witness_runtime.Stable_witness.assert_stable]
-      (stable_witness_type ~loc core_type)
+    pexp_constraint ~loc (assert_witness_expr ~loc) (stable_witness_type ~loc core_type)
+  ;;
+
+  let assert_witness_with_params_for core_type ~params =
+    match params with
+    | [] -> assert_witness_for core_type
+    | params ->
+      let loc = ghost core_type.ptyp_loc in
+      Ppxlib_jane.Ast_builder.Default.eabstract
+        params
+        ~loc
+        ~return_constraint:(stable_witness_type ~loc core_type)
+        (assert_witness_expr ~loc)
   ;;
 
   (* Generate the actual stable witness definition for a type declaration. *)
@@ -189,8 +207,7 @@ module Structure = struct
     let expr =
       List.map td.ptype_params ~f:fst
       |> ptyp_constr ~loc (Located.map_lident td.ptype_name)
-      |> assert_witness_for
-      |> eabstract ~loc (param_patterns td)
+      |> assert_witness_with_params_for ~params:(param_patterns td)
     in
     let pat = pvar ~loc:td.ptype_name.loc (stable_witness_name td.ptype_name.txt) in
     value_binding ~loc ~pat ~expr
