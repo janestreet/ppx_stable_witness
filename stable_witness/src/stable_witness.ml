@@ -1,7 +1,7 @@
 include Stable_witness_intf
 
 (* The runtime representation of stable witnesses does not matter. *)
-type _ t = unit
+type (_ : any) t = unit
 
 module Export = struct
   let stable_witness_array () = ()
