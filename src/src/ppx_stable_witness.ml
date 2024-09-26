@@ -98,11 +98,12 @@ module Structure = struct
     match Attribute.get custom_attr core_type with
     | Some expr -> [ check ~loc expr (stable_witness_type ~loc core_type) ]
     | None ->
-      (match core_type.ptyp_desc with
+      (match Ppxlib_jane.Shim.Core_type_desc.of_parsetree core_type.ptyp_desc with
        | Ptyp_any -> [ unsupported ~loc "wildcard type" ]
        | Ptyp_var var -> [ check_type_variable ~loc var ]
        | Ptyp_arrow _ -> [ unsupported ~loc "arrow type" ]
        | Ptyp_tuple tuple -> List.concat_map tuple ~f:check_core_type
+       | Ptyp_unboxed_tuple _ -> [ unsupported ~loc "unboxed tuple" ]
        | Ptyp_constr (id, params) ->
          check_type_constructor ~loc id params
          :: List.concat_map params ~f:check_core_type
