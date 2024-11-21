@@ -57,7 +57,9 @@ module Signature = struct
     |> psig_value ~loc
   ;;
 
-  let expand ~loc:_ ~path:_ (_, tds) : signature = List.map tds ~f:expand_type_declaration
+  let expand ~loc:_ ~path:_ (_, tds) : signature_item list =
+    List.map tds ~f:expand_type_declaration
+  ;;
 end
 
 module Structure = struct
@@ -99,12 +101,12 @@ module Structure = struct
     | Some expr -> [ check ~loc expr (stable_witness_type ~loc core_type) ]
     | None ->
       (match Ppxlib_jane.Shim.Core_type_desc.of_parsetree core_type.ptyp_desc with
-       | Ptyp_var var -> [ check_type_variable ~loc var ]
-       | Ptyp_tuple tuple -> List.concat_map tuple ~f:check_core_type
+       | Ptyp_var (var, _) -> [ check_type_variable ~loc var ]
+       | Ptyp_tuple tuple -> List.concat_map tuple ~f:(fun (_, t) -> check_core_type t)
        | Ptyp_constr (id, params) ->
          check_type_constructor ~loc id params
          :: List.concat_map params ~f:check_core_type
-       | Ptyp_alias (core_type, _) -> check_core_type core_type
+       | Ptyp_alias (core_type, _, _) -> check_core_type core_type
        | Ptyp_variant (rows, _, _) -> List.concat_map rows ~f:check_row_field
        | unsupported_type ->
          [ unsupported
@@ -217,8 +219,11 @@ module Structure = struct
       when String.equal name td.ptype_name.txt ->
       (match
          List.for_all2 params td.ptype_params ~f:(fun actual (formal, _) ->
-           match actual.ptyp_desc, formal.ptyp_desc with
-           | Ptyp_var a, Ptyp_var b -> String.equal a b
+           match
+             ( Ppxlib_jane.Shim.Core_type_desc.of_parsetree actual.ptyp_desc
+             , Ppxlib_jane.Shim.Core_type_desc.of_parsetree formal.ptyp_desc )
+           with
+           | Ptyp_var (a, _), Ptyp_var (b, _) -> String.equal a b
            | _ -> false)
        with
        | Ok bool -> bool
