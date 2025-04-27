@@ -10,8 +10,8 @@ module type T3 = sig
   type (_, _, _) t
 end
 
-module type Stable_witness = sig
-  type ('a : any) t
+module type Stable_witness = sig @@ portable
+  type ('a : any) t : value mod contended portable
 
   module Export : sig
     (** Stable witnesses for primitive types exported by [Core.Core_stable]. Code using
@@ -41,7 +41,7 @@ module type Stable_witness = sig
 
   module type T1 = T1
 
-  module Of_serializable1 (Stable_format : T1) (M : T1) : sig
+  module Of_serializable1 (Stable_format : T1) (M : T1) : sig @@ portable
     (** This is the analogue of [of_serializable] for types with 1 type parameter, e.g.
         ['a M.t].
 
@@ -59,8 +59,7 @@ module type Stable_witness = sig
               M.to_stable_format
               witness
           ;;
-        ]}
-    *)
+        ]} *)
     val of_serializable
       :  ('a t -> 'a Stable_format.t t) (** witness for stable format *)
       -> ('a Stable_format.t -> 'a M.t) (** conversion from stable format *)
@@ -70,7 +69,7 @@ module type Stable_witness = sig
 
   module type T2 = T2
 
-  module Of_serializable2 (Stable_format : T2) (M : T2) : sig
+  module Of_serializable2 (Stable_format : T2) (M : T2) : sig @@ portable
     (** This is the analogue of [of_serializable] for types with 2 type parameters. *)
     val of_serializable
       :  ('a1 t -> 'a2 t -> ('a1, 'a2) Stable_format.t t) (** witness for stable format *)
@@ -79,7 +78,7 @@ module type Stable_witness = sig
       -> ('a1 t -> 'a2 t -> ('a1, 'a2) M.t t)
   end
 
-  module Of_serializable3 (Stable_format : T3) (M : T3) : sig
+  module Of_serializable3 (Stable_format : T3) (M : T3) : sig @@ portable
     (** This is the analogue of [of_serializable] for types with 3 type parameters. *)
     val of_serializable
       :  ('a1 t -> 'a2 t -> 'a3 t -> ('a1, 'a2, 'a3) Stable_format.t t)
@@ -90,17 +89,17 @@ module type Stable_witness = sig
       -> ('a1 t -> 'a2 t -> 'a3 t -> ('a1, 'a2, 'a3) M.t t)
   end
 
-  (** This is an escape hatch.  Don't use it unless you have to.
+  (** This is an escape hatch. Don't use it unless you have to.
 
       There are two use cases for this:
 
       1. It allows you to assert that a type that you're writing has stable serialization
-      functions, even if the type itself depends on unstable types.
+         functions, even if the type itself depends on unstable types.
 
       2. It allows you to assert that a type from some other module is stable (and
-      generate a stable witness for it) even if the type doesn't provide one for itself.
-      It is almost always better to get the upstream code to provide a stability
-      guarantee. At the very least, consult with the upstream maintainer to make sure
-      their serializations are stable over time, and document the discussion. *)
+         generate a stable witness for it) even if the type doesn't provide one for
+         itself. It is almost always better to get the upstream code to provide a
+         stability guarantee. At the very least, consult with the upstream maintainer to
+         make sure their serializations are stable over time, and document the discussion. *)
   val assert_stable : (_ : any) t
 end
