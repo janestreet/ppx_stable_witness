@@ -46,19 +46,20 @@ module Value_binding = struct
 end
 
 module Signature = struct
-  let expand_type_declaration td =
+  let expand_type_declaration td ~portable =
     let td = name_type_params_in_td td in
     let loc = ghost td.ptype_loc in
-    value_description
+    Ppxlib_jane.Ast_builder.Default.value_description
       ~loc
       ~name:(Loc.map ~f:stable_witness_name td.ptype_name)
       ~type_:(combinator_type_of_type_declaration td ~f:stable_witness_type)
+      ~modalities:(if portable then [ Ppxlib_jane.Modality "portable" ] else [])
       ~prim:[]
     |> psig_value ~loc
   ;;
 
-  let expand ~loc:_ ~path:_ (_, tds) : signature_item list =
-    List.map tds ~f:expand_type_declaration
+  let expand ~loc:_ ~path:_ (_, tds) ~portable : signature_item list =
+    List.map tds ~f:(expand_type_declaration ~portable)
   ;;
 end
 
@@ -151,9 +152,10 @@ module Structure = struct
     let loc = ghost td.ptype_loc in
     let pat = pvar ~loc ("__stable_witness_checks_for_" ^ td.ptype_name.txt ^ "__") in
     let checks =
-      match td.ptype_kind with
+      match Ppxlib_jane.Shim.Type_kind.of_parsetree td.ptype_kind with
       | Ptype_open -> [ unsupported ~loc "open type" ]
       | Ptype_record fields -> List.concat_map fields ~f:check_label_declaration
+      | Ptype_record_unboxed_product _ -> [ unsupported ~loc "unboxed record type" ]
       | Ptype_variant clauses -> List.concat_map clauses ~f:check_constructor_declaration
       | Ptype_abstract ->
         (match td.ptype_manifest with
@@ -293,7 +295,13 @@ module Structure = struct
 end
 
 let extension = Structure.extension
-let sig_type_decl = Deriving.Generator.make_noarg Signature.expand
+
+let sig_type_decl =
+  Deriving.Generator.make
+    Deriving.Args.(empty +> flag "portable")
+    (fun ~loc ~path tds portable -> Signature.expand ~loc ~path tds ~portable)
+;;
+
 let str_type_decl = Deriving.Generator.make_noarg Structure.expand
 
 let () =

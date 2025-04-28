@@ -59,8 +59,7 @@ module type Stable_witness = sig
               M.to_stable_format
               witness
           ;;
-        ]}
-    *)
+        ]} *)
     val of_serializable
       :  ('a t -> 'a Stable_format.t t) (** witness for stable format *)
       -> ('a Stable_format.t -> 'a M.t) (** conversion from stable format *)
@@ -96,17 +95,17 @@ module type Stable_witness = sig
       -> ('a1, 'a2, 'a3) M.t t
   end
 
-  (** This is an escape hatch.  Don't use it unless you have to.
+  (** This is an escape hatch. Don't use it unless you have to.
 
       There are two use cases for this:
 
       1. It allows you to assert that a type that you're writing has stable serialization
-      functions, even if the type itself depends on unstable types.
+         functions, even if the type itself depends on unstable types.
 
       2. It allows you to assert that a type from some other module is stable (and
-      generate a stable witness for it) even if the type doesn't provide one for itself.
-      It is almost always better to get the upstream code to provide a stability
-      guarantee. At the very least, consult with the upstream maintainer to make sure
-      their serializations are stable over time, and document the discussion. *)
+         generate a stable witness for it) even if the type doesn't provide one for
+         itself. It is almost always better to get the upstream code to provide a
+         stability guarantee. At the very least, consult with the upstream maintainer to
+         make sure their serializations are stable over time, and document the discussion. *)
   val assert_stable : _ t
 end
