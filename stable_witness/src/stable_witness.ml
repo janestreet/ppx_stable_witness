@@ -10,6 +10,7 @@ module Export = struct
   let stable_witness_char = ()
   let stable_witness_exn = ()
   let stable_witness_float = ()
+  let stable_witness_iarray () = ()
   let stable_witness_int = ()
   let stable_witness_int32 = ()
   let stable_witness_int64 = ()

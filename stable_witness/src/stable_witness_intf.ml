@@ -23,6 +23,7 @@ module type Stable_witness = sig @@ portable
     val stable_witness_char : char t
     val stable_witness_exn : exn t
     val stable_witness_float : float t
+    val stable_witness_iarray : 'a t -> 'a Basement.Stdlib_iarray_labels.t t
     val stable_witness_int : int t
     val stable_witness_int32 : int32 t
     val stable_witness_int64 : int64 t

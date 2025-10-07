@@ -1,5 +1,5 @@
 (library
  (name stable_witness)
  (public_name ppx_stable_witness.stable_witness)
- (libraries)
+ (libraries basement)
  (preprocess no_preprocessing))
