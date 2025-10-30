@@ -53,7 +53,7 @@ module Signature = struct
       ~loc
       ~name:(Loc.map ~f:stable_witness_name td.ptype_name)
       ~type_:(combinator_type_of_type_declaration td ~f:stable_witness_type)
-      ~modalities:(if portable then [ Ppxlib_jane.Modality "portable" ] else [])
+      ~modalities:(if portable then Ppxlib_jane.Shim.Modalities.portable ~loc else [])
       ~prim:[]
     |> psig_value ~loc
   ;;
