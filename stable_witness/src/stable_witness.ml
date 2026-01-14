@@ -18,6 +18,7 @@ module Export = struct
   let stable_witness_list () = ()
   let stable_witness_nativeint = ()
   let stable_witness_option () = ()
+  let stable_witness_or_null () = ()
   let stable_witness_ref () = ()
   let stable_witness_string = ()
   let stable_witness_unit = ()

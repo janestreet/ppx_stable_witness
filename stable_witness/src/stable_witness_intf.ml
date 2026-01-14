@@ -31,6 +31,7 @@ module type Stable_witness = sig @@ portable
     val stable_witness_list : 'a t -> 'a list t
     val stable_witness_nativeint : nativeint t
     val stable_witness_option : 'a t -> 'a option t
+    val stable_witness_or_null : 'a t -> 'a Basement.Or_null_shim.t t
     val stable_witness_ref : 'a t -> 'a ref t
     val stable_witness_string : string t
     val stable_witness_unit : unit t
