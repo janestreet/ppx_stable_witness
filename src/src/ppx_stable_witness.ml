@@ -1,4 +1,4 @@
-open! Base
+open! Ppx_helpers.Base_lite
 open Ppxlib
 open Ast_builder.Default
 
@@ -12,16 +12,6 @@ let strip_locs =
   end
 ;;
 
-let copy =
-  (* Strip off attributes and mark all locations as ghost so that a copy of syntax
-     (usually a type) can be included in generated code. *)
-  object
-    inherit Ast_traverse.map
-    method! attributes _ = []
-    method! location = ghost
-  end
-;;
-
 let custom_attr =
   Attribute.declare
     "stable_witness.custom"
@@ -30,13 +20,19 @@ let custom_attr =
     Fn.id
 ;;
 
-let stable_witness_name = function
+let stable_witness_name type_name =
+  match Ppx_helpers.mangle_unboxed type_name with
   | "t" -> "stable_witness"
+  | "t_u" -> "stable_witness_u"
   | type_name -> "stable_witness_" ^ type_name
 ;;
 
 let stable_witness_type ~loc core_type =
-  [%type: [%t copy#core_type core_type] Ppx_stable_witness_runtime.Stable_witness.t]
+  (* Strip off attributes and mark all locations as ghost so that a copy of syntax
+     (usually a type) can be included in generated code. *)
+  [%type:
+    [%t Ppx_helpers.ghost_and_strip_attributes#core_type core_type]
+      Ppx_stable_witness_runtime.Stable_witness.t]
 ;;
 
 let stable_witness_variable var = "__'" ^ var ^ "_stable_witness"
@@ -58,8 +54,9 @@ module Signature = struct
     |> psig_value ~loc
   ;;
 
-  let expand ~loc:_ ~path:_ (_, tds) ~portable : signature_item list =
+  let expand ~loc ~path:_ (_, tds) ~portable : signature_item list =
     List.map tds ~f:(expand_type_declaration ~portable)
+    |> Ppxlib_jane.suppress_imprecise_kind_annotation_warning_in_signature ~loc tds
   ;;
 end
 
@@ -70,11 +67,17 @@ module Structure = struct
     value_binding ~loc ~pat:[%pat? (_ : [%t witness_type])] ~expr:witness_expr
   ;;
 
-  let unsupported ~loc description =
+  let error ~drop ~loc message =
+    (* [drop] reminds callers to drop attributes from code not being expanded. *)
+    drop ();
+    Location.Error.to_extension (Location.Error.make ~loc message ~sub:[])
+  ;;
+
+  let unsupported ~drop ~loc description =
     (* Rather than raise at expansion time, we generate a [%error] node that can complain
        during compile time. This is more merlin-friendly, among other benefits. *)
     let message = Printf.sprintf "ppx_stable_witness: %s not supported" description in
-    check ~loc [%expr [%ocaml.error [%e estring ~loc message]]] [%type: _]
+    check ~loc (pexp_extension ~loc (error message ~loc ~drop)) [%type: _]
   ;;
 
   let check_type_constructor ~loc id params =
@@ -112,6 +115,8 @@ module Structure = struct
        | unsupported_type ->
          [ unsupported
              ~loc
+             ~drop:(fun () ->
+               Attribute.explicitly_drop#core_type_desc core_type.ptyp_desc)
              (Ppxlib_jane.Language_feature_name.of_core_type_desc unsupported_type)
          ])
 
@@ -125,7 +130,12 @@ module Structure = struct
 
   let check_constructor_declaration cd =
     match cd.pcd_res with
-    | Some _ -> [ unsupported ~loc:cd.pcd_loc "GADT" ]
+    | Some core_type ->
+      [ unsupported
+          ~loc:cd.pcd_loc
+          ~drop:(fun () -> Attribute.explicitly_drop#core_type core_type)
+          "GADT"
+      ]
     | None ->
       (match cd.pcd_args with
        | Pcstr_tuple tuple ->
@@ -137,25 +147,32 @@ module Structure = struct
        | Pcstr_record record -> List.concat_map ~f:check_label_declaration record)
   ;;
 
-  let param_patterns td =
-    List.map td.ptype_params ~f:(fun param ->
-      let core_type = fst param in
-      let loc = ghost core_type.ptyp_loc in
-      ppat_constraint
-        ~loc
-        (pvar ~loc (stable_witness_variable (get_type_param_name param).txt))
-        (stable_witness_type ~loc core_type))
+  let param_patterns =
+    Ppx_helpers.type_param_conv_pats
+      ~param_name:stable_witness_variable
+      ~param_type:stable_witness_type
   ;;
 
   (* Generate all the witness type checks for a type declaration. *)
   let check_type_declaration td =
     let loc = ghost td.ptype_loc in
-    let pat = pvar ~loc ("__stable_witness_checks_for_" ^ td.ptype_name.txt ^ "__") in
+    let pat =
+      pvar
+        ~loc
+        ("__stable_witness_checks_for_"
+         ^ Ppx_helpers.mangle_unboxed td.ptype_name.txt
+         ^ "__")
+    in
     let checks =
       match Ppxlib_jane.Shim.Type_kind.of_parsetree td.ptype_kind with
-      | Ptype_open -> [ unsupported ~loc "open type" ]
-      | Ptype_record fields -> List.concat_map fields ~f:check_label_declaration
-      | Ptype_record_unboxed_product _ -> [ unsupported ~loc "unboxed record type" ]
+      | Ptype_open ->
+        [ unsupported
+            ~loc
+            ~drop:(fun () -> Attribute.explicitly_drop#type_declaration td)
+            "open type"
+        ]
+      | Ptype_record fields | Ptype_record_unboxed_product fields ->
+        List.concat_map fields ~f:check_label_declaration
       | Ptype_variant clauses -> List.concat_map clauses ~f:check_constructor_declaration
       | Ptype_abstract ->
         (match td.ptype_manifest with
@@ -228,8 +245,8 @@ module Structure = struct
            | Ptyp_var (a, _), Ptyp_var (b, _) -> String.equal a b
            | _ -> false)
        with
-       | Ok bool -> bool
-       | Unequal_lengths -> false)
+       | `Ok bool -> bool
+       | `Unequal_lengths -> false)
     | _ -> false
   ;;
 
@@ -239,7 +256,7 @@ module Structure = struct
          non-recursive definitions. What we really want to check for is whether a type
          refers to its own name, not whether it's recursive. This is equivalent to
          [type_is_recursive Recursive], so we use that even though it reads wrong. *)
-      inherit type_is_recursive Recursive tds
+      inherit type_is_recursive Recursive tds as super
 
       val! type_names =
         List.filter_map tds ~f:(fun td ->
@@ -251,6 +268,14 @@ module Structure = struct
           | false ->
             (* Anything else, we need to look for. *)
             Some td.ptype_name.txt)
+
+      method! core_type core_type =
+        match Attribute.get custom_attr ~mark_as_seen:false core_type with
+        | Some _ ->
+          (* If there is a [custom_attribute] attached to the node, automatically skip and
+             mark as [Nonrecursive]. *)
+          ()
+        | None -> super#core_type core_type
     end
 
   let refers_to_redefined_type tds =
@@ -260,28 +285,52 @@ module Structure = struct
     | Recursive -> true
   ;;
 
+  (* Checks if the type is actually recursive ignoring the custom attribute *)
+  let really_recursive rec_flag tds =
+    (object
+       inherit type_is_recursive rec_flag tds as super
+
+       method! core_type core_type =
+         match Attribute.get custom_attr ~mark_as_seen:false core_type with
+         | Some _ -> ()
+         | None -> super#core_type core_type
+    end)
+      #go
+      ()
+  ;;
+
   (* Define both the stable witness, and all the checks, for a type declaration. Define
      them both in the same [let] with a shared [rec_flag] so that the checks have the same
-     scope as the stable witness itself. *)
-  let expand ~loc ~path:_ (rec_flag, tds) =
+     scope as the stable witness itself.
+
+     [~explicit_tds] is [tds] not including implicit unboxed types. For example, for
+     [type t = { x : int }], [tds] is [[t, t#]] while [explicit_tds] is only [[t]]. We
+     only generate checks for [explicit_tds] since the checks for the implicit unboxed
+     versions are exactly the same. *)
+  let expand ~loc ~path:_ (rec_flag, tds) ~explicit_tds =
     let tds = List.map tds ~f:name_type_params_in_td in
+    let rec_flag = really_recursive rec_flag tds in
+    let explicit_tds = List.map explicit_tds ~f:name_type_params_in_td in
     match rec_flag with
     | Nonrecursive when refers_to_redefined_type tds ->
-      let message =
-        Printf.sprintf
-          "ppx_stable_witness: This definition shadows a type that it also refers to. \
-           Expanded code needs to refer to the shadowed name.\n\n\
-           Perhaps you can define an alias for the shadowed type, then use the alias in \
-           this definition."
-      in
-      [%str [%%ocaml.error [%e estring ~loc message]]]
+      [ pstr_extension
+          ~loc
+          (error
+             ~loc
+             ~drop:(fun () -> List.iter tds ~f:Attribute.explicitly_drop#type_declaration)
+             "ppx_stable_witness: This definition shadows a type that it also refers to. \
+              Expanded code needs to refer to the shadowed name.\n\n\
+              Perhaps you can define an alias for the shadowed type, then use the alias \
+              in this definition.")
+          []
+      ]
     | _ ->
-      let rec_flag = really_recursive rec_flag tds in
       List.concat
         [ List.map tds ~f:expand_type_declaration
-        ; List.concat_map tds ~f:check_type_declaration
+        ; List.concat_map explicit_tds ~f:check_type_declaration
         ]
       |> pstr_value_list ~loc rec_flag
+      |> Ppxlib_jane.suppress_imprecise_kind_annotation_warning_in_structure ~loc tds
   ;;
 
   (* Expand a single type to an expression containing its checks and a stable witness. *)
@@ -298,11 +347,19 @@ let extension = Structure.extension
 
 let sig_type_decl =
   Deriving.Generator.make
-    Deriving.Args.(empty +> flag "portable")
-    (fun ~loc ~path tds portable -> Signature.expand ~loc ~path tds ~portable)
+    Deriving.Args.(empty +> flag "portable" +> flag "unboxed")
+    (fun ~loc ~path (rf, tds) portable unboxed ->
+      let tds = Ppx_helpers.with_implicit_unboxed_types ~loc ~unboxed tds in
+      Signature.expand ~loc ~path (rf, tds) ~portable)
 ;;
 
-let str_type_decl = Deriving.Generator.make_noarg Structure.expand
+let str_type_decl =
+  Deriving.Generator.make
+    Deriving.Args.(empty +> flag "unboxed")
+    (fun ~loc ~path (rf, explicit_tds) unboxed ->
+      let tds = Ppx_helpers.with_implicit_unboxed_types ~loc ~unboxed explicit_tds in
+      Structure.expand ~loc ~path (rf, tds) ~explicit_tds)
+;;
 
 let () =
   Deriving.add "stable_witness" ~sig_type_decl ~str_type_decl ~extension

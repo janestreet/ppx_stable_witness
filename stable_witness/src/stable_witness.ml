@@ -1,7 +1,11 @@
-include Stable_witness_intf
+include Stable_witness_intf.Definitions
 
 (* The runtime representation of stable witnesses does not matter. *)
 type (_ : any) t = unit
+
+module type S = S with type ('a : any) stable_witness := 'a t
+module type S1 = S1 with type ('a : any) stable_witness := 'a t
+module type S2 = S2 with type ('a : any) stable_witness := 'a t
 
 module Export = struct
   let stable_witness_array () = ()

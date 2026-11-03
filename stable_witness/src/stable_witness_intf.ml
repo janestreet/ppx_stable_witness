@@ -1,29 +1,67 @@
-module type T1 = sig
-  type _ t
-end
+module Definitions = struct
+  module type T1 = sig
+    type _ t
+  end
 
-module type T2 = sig
-  type (_, _) t
-end
+  module type T2 = sig
+    type (_, _) t
+  end
 
-module type T3 = sig
-  type (_, _, _) t
+  module type T3 = sig
+    type (_, _, _) t
+  end
+
+  module type S = sig
+    type ('a : any) stable_witness
+    type t : any
+
+    val stable_witness : t stable_witness
+  end
+
+  module type S1 = sig
+    type ('a : any) stable_witness
+    type _ t : any
+
+    val stable_witness : 'a stable_witness -> 'a t stable_witness
+  end
+
+  module type S2 = sig
+    type ('a : any) stable_witness
+    type (_, _) t : any
+
+    val stable_witness
+      :  'a stable_witness
+      -> 'b stable_witness
+      -> ('a, 'b) t stable_witness
+  end
 end
 
 module type Stable_witness = sig @@ portable
+  include module type of struct
+    include Definitions
+  end
+
   type ('a : any) t : value mod contended portable
+
+  module type S = S with type ('a : any) stable_witness := 'a t
+  module type S1 = S1 with type ('a : any) stable_witness := 'a t
+  module type S2 = S2 with type ('a : any) stable_witness := 'a t
 
   module Export : sig
     (** Stable witnesses for primitive types exported by [Core.Core_stable]. Code using
         [ppx_stable_witness] is expected to start with [open Stable_witness.Export]. *)
 
-    val stable_witness_array : 'a t -> 'a array t
+    val stable_witness_array : ('a : any separable). 'a t -> 'a array t
     val stable_witness_bool : bool t
     val stable_witness_bytes : bytes t
     val stable_witness_char : char t
     val stable_witness_exn : exn t
     val stable_witness_float : float t
-    val stable_witness_iarray : 'a t -> 'a Basement.Stdlib_iarray_labels.t t
+
+    val stable_witness_iarray
+      : ('a : any separable).
+      'a t -> 'a Basement.Stdlib_iarray_labels.t t
+
     val stable_witness_int : int t
     val stable_witness_int32 : int32 t
     val stable_witness_int64 : int64 t
@@ -40,8 +78,6 @@ module type Stable_witness = sig @@ portable
   (** This is useful to provide a stable witness on a type that uses another type for
       serialization. *)
   val of_serializable : 'a t -> ('a -> 'b) -> ('b -> 'a) -> 'b t
-
-  module type T1 = T1
 
   module Of_serializable1 (Stable_format : T1) (M : T1) : sig @@ portable
     (** This is the analogue of [of_serializable] for types with 1 type parameter, e.g.
@@ -68,8 +104,6 @@ module type Stable_witness = sig @@ portable
       -> ('a M.t -> 'a Stable_format.t) (** conversion to stable format *)
       -> ('a t -> 'a M.t t)
   end
-
-  module type T2 = T2
 
   module Of_serializable2 (Stable_format : T2) (M : T2) : sig @@ portable
     (** This is the analogue of [of_serializable] for types with 2 type parameters. *)
